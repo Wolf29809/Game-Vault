@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Vault</title>
+<style>
+:root{--bg:#1b1f2a;--panel:#242a38;--ink:#f1ece0;--muted:#9aa3b5;--accent:#ffb627;--line:#38405280;--err:#ff7b7b;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#f3efe6;--panel:#fffdf8;--ink:#1d2230;--muted:#5d6577;--accent:#c47a00;--line:#d8d1c0;--err:#b3261e;color-scheme:light}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Trebuchet MS",Verdana,sans-serif;min-height:100vh}
+h1,h2{font-family:Georgia,"Times New Roman",serif;margin:0 0 .5rem}
+button,input,textarea{font:inherit;color:inherit}
+input,textarea{width:100%;padding:.65rem .8rem;margin:.25rem 0 1rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
+input:focus,textarea:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label{font-size:.9rem;color:var(--muted)}
+.btn{background:var(--accent);color:#1b1f2a;border:0;border-radius:6px;padding:.65rem 1.1rem;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.center{min-height:100vh;display:grid;place-items:center;padding:1rem}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:2rem;width:100%;max-width:400px}
+.msg{min-height:1.4em;font-size:.9rem;color:var(--err)}.msg.ok{color:var(--accent)}
+.hidden{display:none!important}
+header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border-bottom:1px solid var(--line);gap:1rem;flex-wrap:wrap}
+main{max-width:960px;margin:0 auto;padding:1.5rem}
+.add{display:flex;gap:.6rem;flex-wrap:wrap}.add input{flex:1;min-width:220px;margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-top:1.5rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem;display:flex;flex-direction:column;gap:.5rem}
+.card h3{margin:0;font-size:1.05rem;word-break:break-word}.card p{margin:0;color:var(--muted);font-size:.9rem;flex:1}
+.card .row{display:flex;gap:.5rem;flex-wrap:wrap}.card .row a,.card .row button{font-size:.85rem;padding:.4rem .7rem;border-radius:6px;text-decoration:none;border:1px solid var(--line);color:var(--ink);background:transparent;cursor:pointer}
+.card .row a.play{background:var(--accent);color:#1b1f2a;border-color:var(--accent);font-weight:700}
+.empty{color:var(--muted);margin-top:2rem}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:2rem;max-width:420px;width:92%}
+dialog::backdrop{background:#000a}
+</style>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<section id="login" class="center">
+  <div class="box">
+    <h1 class="site-name">Game Vault</h1>
+    <p style="color:var(--muted);margin-top:0">Sign in with your email and password.</p>
+    <div id="lmsg" class="msg" role="alert"></div>
+    <button class="btn" id="signin" style="width:100%">Sign in</button>
+    <p style="text-align:center;margin:1rem 0 0"><button class="btn ghost" id="reqbtn" style="width:100%">Request an account</button></p>
+  </div>
+</section>
+
+<!-- ===== LIBRARY ===== -->
+<section id="app" class="hidden">
+  <header>
+    <h1 class="site-name" style="margin:0">Game Vault</h1>
+    <div><span id="who" style="color:var(--muted);margin-right:1rem"></span><button class="btn ghost" id="out">Sign out</button></div>
+  </header>
+  <main>
+    <h2>Add a game</h2>
+    <p style="color:var(--muted);margin-top:0">Paste a GitHub link (https://github.com/name/game) or just <b>name/game</b>.</p>
+    <form class="add" id="addform">
+      <input id="repo" placeholder="name/game" aria-label="GitHub repository">
+      <button class="btn" type="submit">Add game</button>
+    </form>
+    <div id="amsg" class="msg" role="status"></div>
+    <div id="grid" class="grid"></div>
+    <p id="empty" class="empty hidden">No games yet. Paste a repository above to add your first one.</p>
+  </main>
+</section>
+
+<!-- ===== REQUEST ACCOUNT ===== -->
+<dialog id="reqdlg">
+  <h2>Request an account</h2>
+  <form id="reqform">
+    <label for="rn">Your name</label><input id="rn" name="name" required>
+    <label for="re">Email</label><input id="re" name="email" type="email" required>
+    <label for="ru">Username you'd like</label><input id="ru" name="username" required>
+    <label for="rm">Why do you want access?</label><textarea id="rm" name="message" rows="3"></textarea>
+    <div id="rmsg" class="msg" role="status"></div>
+    <div style="display:flex;gap:.6rem"><button class="btn" type="submit">Send request</button><button class="btn ghost" type="button" id="rcancel">Cancel</button></div>
+  </form>
+</dialog>
+
+<script>
+/* ================= SETTINGS — EDIT THESE ================= */
+// The name of your site. Change it here and it updates everywhere
+// (browser tab, login screen, header, and account request emails).
+const SITE_NAME = "Game Vault";
+
+// Sign-in is handled by Netlify Identity. Add people from your Netlify dashboard (Identity > Invite users).
+
+// Where account requests go. Create a free form at https://formspree.io
+// and paste its URL here (looks like https://formspree.io/f/abcdwxyz).
+// If left empty, the form opens an email to OWNER_EMAIL instead.
+const FORMSPREE_URL = "";
+const OWNER_EMAIL   = "you@example.com";
+/* ========================================================= */
+
+const $ = id => document.getElementById(id);
+document.title = SITE_NAME;
+document.querySelectorAll(".site-name").forEach(el => el.textContent = SITE_NAME);
+
+const store = {
+  get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+let sess = null;
+/* ---- login (Netlify Identity) ---- */
+function gate(user){
+  if(user){ sess=user.email; showApp(); }
+  else { sess=null; $("app").classList.add("hidden"); $("login").classList.remove("hidden"); }
+}
+function showApp(){ $("login").classList.add("hidden"); $("app").classList.remove("hidden"); $("who").textContent="Signed in as "+sess; render(); }
+
+/* ---- request account ---- */
+$("reqbtn").onclick=()=>$("reqdlg").showModal();
+$("rcancel").onclick=()=>$("reqdlg").close();
+$("reqform").onsubmit=async e=>{
+  e.preventDefault();
+  const f=e.target, data=Object.fromEntries(new FormData(f)), m=$("rmsg");
+  m.className="msg"; m.textContent="";
+  if(FORMSPREE_URL){
+    try{
+      const r=await fetch(FORMSPREE_URL,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(data)});
+      if(!r.ok) throw 0;
+      m.className="msg ok"; m.textContent="Request sent. You'll hear back by email."; f.reset();
+    }catch{ m.textContent="Couldn't send the request. Try again in a minute."; }
+  } else {
+    const body=`Name: ${data.name}\nEmail: ${data.email}\nUsername: ${data.username}\n\n${data.message}`;
+    location.href=`mailto:${OWNER_EMAIL}?subject=${encodeURIComponent(SITE_NAME + " account request")}&body=${encodeURIComponent(body)}`;
+    m.className="msg ok"; m.textContent="Your email app should open. Send the message to finish the request.";
+  }
+};
+
+/* ---- games ---- */
+let games = store.get("fg-games",[]);
+function parseRepo(s){
+  s=s.trim().replace(/\.git$/,"").replace(/\/$/,"");
+  const m=s.match(/(?:github\.com\/)?([\w.-]+)\/([\w.-]+)$/);
+  return m?{owner:m[1],name:m[2]}:null;
+}
+$("addform").onsubmit=async e=>{
+  e.preventDefault();
+  const m=$("amsg"); m.className="msg"; m.textContent="";
+  const p=parseRepo($("repo").value);
+  if(!p){m.textContent="Enter a link like https://github.com/name/game or name/game.";return}
+  if(games.some(g=>g.full.toLowerCase()===(p.owner+"/"+p.name).toLowerCase())){m.textContent="That game is already in the list.";return}
+  m.className="msg ok"; m.textContent="Looking it up…";
+  try{
+    const r=await fetch(`https://api.github.com/repos/${p.owner}/${p.name}`);
+    if(r.status===404) throw new Error("GitHub can't find that repository. Check the name and that it's public.");
+    if(!r.ok) throw new Error("GitHub is busy or rate-limiting. Try again in a few minutes.");
+    const d=await r.json();
+    games.unshift({full:d.full_name,desc:d.description||"No description.",url:d.html_url,
+      play:d.has_pages?`https://${d.owner.login.toLowerCase()}.github.io/${d.name}/`:(d.homepage||""),
+      fork:!!d.fork});
+    store.set("fg-games",games); $("repo").value=""; m.textContent="Added "+d.full_name+"."; render();
+  }catch(err){ m.className="msg"; m.textContent=err.message||"Couldn't reach GitHub."; }
+};
+function render(){
+  const g=$("grid"); g.innerHTML="";
+  $("empty").classList.toggle("hidden",games.length>0);
+  games.forEach((x,i)=>{
+    const c=document.createElement("div"); c.className="card";
+    const h=document.createElement("h3"); h.textContent=x.full;
+    const p=document.createElement("p"); p.textContent=x.desc;
+    const row=document.createElement("div"); row.className="row";
+    if(x.play){const a=document.createElement("a");a.href=x.play;a.target="_blank";a.rel="noopener";a.className="play";a.textContent="Play";row.append(a)}
+    const s=document.createElement("a");s.href=x.url;s.target="_blank";s.rel="noopener";s.textContent="Source";row.append(s);
+    const d=document.createElement("button");d.textContent="Remove";d.onclick=()=>{games.splice(i,1);store.set("fg-games",games);render()};row.append(d);
+    c.append(h,p,row); g.append(c);
+  });
+}
+const ni = window.netlifyIdentity;
+if(ni){
+  ni.on("init", gate);
+  ni.on("login", u => { ni.close(); gate(u); });
+  ni.on("logout", () => gate(null));
+  $("signin").onclick = () => ni.open("login");
+  $("out").onclick = () => ni.logout();
+  ni.init();
+} else {
+  $("lmsg").textContent = "Sign-in service didn't load. Check your connection and reload.";
+}
+</script>
+</body>
+</html>
